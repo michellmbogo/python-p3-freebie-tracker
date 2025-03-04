@@ -18,8 +18,8 @@ class Company(Base):
     founding_year = Column(Integer())
 
     # Relationships
-    freebies = relationship('Freebie', back_populates='company')
-    devs = relationship('Dev', secondary='freebies', back_populates='companies')
+    freebies = relationship('Freebie', back_populates='company',overlaps='devs')
+    devs = relationship('Dev', secondary='freebies', back_populates='companies', overlaps='freebies')
 
 
     def __repr__(self):
@@ -31,11 +31,11 @@ class Company(Base):
     def oldest_company(cls, session):
         return session.query(cls).order_by(cls.founding_year).first()
 
-    def give_freebie(self, dev, item_name, value):
+    def give_freebie(self, session, dev, item_name, value):
         freebie = Freebie(dev_id=dev.id, company_id=self.id, item_name=item_name, value=value)
         session.add(freebie)
         session.commit()
-        return freebie    
+            
 
 class Dev(Base):
     __tablename__ = 'devs'
@@ -43,8 +43,8 @@ class Dev(Base):
     id = Column(Integer(), primary_key=True)
     name= Column(String())
 
-    freebies = relationship('Freebie', back_populates='dev')
-    companies = relationship('Company', secondary='freebies', back_populates='devs')
+    freebies = relationship('Freebie', back_populates='dev', overlaps="companies")
+    companies = relationship('Company', secondary='freebies', back_populates='devs', overlaps="freebies")
 
 
     def __repr__(self):
@@ -53,10 +53,12 @@ class Dev(Base):
     def received_one(self, item_name):
         return any(freebie.item_name == item_name for freebie in self.freebies)
 
-    def give_away(self, dev, freebie):
+    def give_away(self, dev, freebie, session):
         if freebie.dev == self:
             freebie.dev = dev
             session.commit()  
+        else:
+            raise ValueError("Cannot give away user item that does not belong to you.")
 
     
 class Freebie(Base):
@@ -65,9 +67,11 @@ class Freebie(Base):
     id = Column(Integer, primary_key=True)
     item_name = Column(String, nullable=False)
     value = Column(Integer, nullable=False)
+
     # Foreign keys
     dev_id = Column(Integer, ForeignKey('devs.id'), nullable=False)
     company_id = Column(Integer, ForeignKey('companies.id'), nullable=False)
+    
     # Relationships
     dev = relationship("Dev", back_populates="freebies")
     company = relationship("Company", back_populates="freebies")
